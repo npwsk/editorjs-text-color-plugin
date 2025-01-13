@@ -6,6 +6,10 @@ const { markerIcon, textIcon } = require('./icons');
 const { getDefaultColorCache, handleCSSVariables } = require('./picker/utils/main');
 require('./index.css').toString();
 
+const MARKER_PARENT_TAG = 'MARK';
+const TEXT_PARENT_TAG = 'SPAN';
+const TEXT_PARENT_CLASSNAME = 'editor-text-color';
+
 /**
  * Text Color Tool for Editor.js
  */
@@ -19,7 +23,8 @@ class Color {
     this.config = config;
     this.clickedOnLeft = false;
     this.pluginType = this.config.type || 'text';
-    this.parentTag = this.pluginType === 'marker' ? 'MARK' : 'FONT';
+    this.parentTag = this.pluginType === 'marker' ? MARKER_PARENT_TAG : TEXT_PARENT_TAG;
+    this.parentClassName = this.pluginType === 'text' ? TEXT_PARENT_CLASSNAME : null;
     this.hasCustomPicker = this.config.customPicker || false;
     this.color = handleCSSVariables(
         getDefaultColorCache(this.config.defaultColor, this.pluginType)
@@ -129,15 +134,9 @@ class Color {
     }
 
     /**
-     * clean legacy wrapper generated before editorjs-text-color-plugin v3.0
-     */
-    const legacySpanWrapper = this.api.selection.findParentTag("SPAN");
-    if (legacySpanWrapper) this.unwrap(legacySpanWrapper);
-
-    /**
      * If start or end of selection is in the highlighted block
      */
-    const termWrapper = this.api.selection.findParentTag(this.parentTag);
+    const termWrapper = this.findSelectionParentTag();
 
     if (termWrapper) {
       this.unwrap(termWrapper);
@@ -156,6 +155,9 @@ class Color {
   wrap(range) {
     const selectedText = range.extractContents();
     const newWrapper = document.createElement(this.parentTag);
+    if (this.parentClassName) {
+      newWrapper.classList.add(this.parentClassName);
+    }
 
     newWrapper.appendChild(selectedText);
     range.insertNode(newWrapper);
@@ -176,7 +178,7 @@ class Color {
    */
   wrapMarker(newWrapper) {
     newWrapper.style.backgroundColor = this.color;
-    const colorWrapper = this.api.selection.findParentTag('FONT');
+    const colorWrapper = this.api.selection.findParentTag(TEXT_PARENT_TAG, TEXT_PARENT_CLASSNAME);
     if (colorWrapper) newWrapper.style.color = colorWrapper.style.color;
   }
 
@@ -252,19 +254,18 @@ class Color {
    * Check and change Term's state for current selection
    */
   checkState() {
-    const legacyWrapper = this.api.selection.findParentTag("SPAN");
-    const termTag = this.api.selection.findParentTag(this.parentTag);
-    let isWrapped = legacyWrapper ? this.handleLegacyWrapper(legacyWrapper, termTag) : termTag;
+    let isWrapped = this.findSelectionParentTag();
     this.button.classList.toggle(this.iconClasses.active, !!isWrapped)
 
     return !!isWrapped;
   }
 
-  /**
-   * handle icon active state for legacy wrappers
-   */
-  handleLegacyWrapper(legacyWrapper, termTag) {
-    return this.pluginType === 'marker' ? legacyWrapper : (termTag & legacyWrapper);
+  findSelectionParentTag() {
+    if (this.pluginType === 'marker') {
+      return this.api.selection.findParentTag(MARKER_PARENT_TAG);
+    }
+
+    return this.api.selection.findParentTag(TEXT_PARENT_TAG, TEXT_PARENT_CLASSNAME);
   }
 
   /**
@@ -273,9 +274,8 @@ class Color {
    */
   static get sanitize() {
     return {
-      font: true,
       span: true,
-      mark: true
+      mark: true,
     };
   }
 
